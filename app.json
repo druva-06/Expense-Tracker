@@ -20,6 +20,7 @@
       }
     },
     "android": {
+      "package": "com.druva.expensetrackerapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
