@@ -28,6 +28,7 @@
       "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -47,6 +48,12 @@
         "projectId": "e2eba01d-8e91-46b7-bffd-b293888841f1"
       }
     },
-    "owner": "druva28"
+    "owner": "druva28",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e2eba01d-8e91-46b7-bffd-b293888841f1"
+    }
   }
 }
