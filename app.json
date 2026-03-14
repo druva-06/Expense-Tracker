@@ -4,11 +4,11 @@
     "slug": "expense-tracker-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/logo.png",
+    "icon": "./assets/logo-centered.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/logo.png",
+      "image": "./assets/logo-splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -22,17 +22,21 @@
     "android": {
       "package": "com.druva.expensetrackerapp",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.png",
+        "foregroundImage": "./assets/logo-adaptive-foreground.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
-      "favicon": "./assets/logo.png"
+      "favicon": "./assets/logo-centered.png"
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#EEF2FF",
+      "barStyle": "dark-content"
     },
     "plugins": [
       "@react-native-community/datetimepicker",
