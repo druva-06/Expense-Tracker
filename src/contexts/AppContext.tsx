@@ -10,6 +10,7 @@ interface AppContextType {
   isLoading: boolean;
   apiKey: string | null;
   setApiKey: (key: string) => Promise<void>;
+  clearApiKey: () => Promise<void>;
   expenses: Expense[];
   refreshExpenses: () => Promise<void>;
   lastDeletedExpense: Expense | null;
@@ -46,7 +47,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         aiService.setApiKey(storedApiKey);
       }
 
-      await refreshExpenses();
+      // Load expenses with the userId we just set
+      if (storedUserId) {
+        const recentExpenses = await db.getRecentExpenses(storedUserId, 50);
+        setExpenses(recentExpenses);
+      }
     } catch (error) {
       console.error('Initialization error:', error);
     } finally {
@@ -58,6 +63,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await storage.setApiKey(key);
     setApiKeyState(key);
     aiService.setApiKey(key);
+  };
+
+  const clearApiKey = async () => {
+    await storage.clearApiKey();
+    setApiKeyState(null);
+    aiService.setApiKey('');
   };
 
   const refreshExpenses = async () => {
@@ -77,6 +88,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoading,
         apiKey,
         setApiKey,
+        clearApiKey,
         expenses,
         refreshExpenses,
         lastDeletedExpense,

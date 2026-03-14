@@ -15,6 +15,10 @@ export const storage = {
     return await AsyncStorage.getItem(KEYS.API_KEY);
   },
 
+  async clearApiKey(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.API_KEY);
+  },
+
   async setUserId(userId: string): Promise<void> {
     await AsyncStorage.setItem(KEYS.USER_ID, userId);
   },

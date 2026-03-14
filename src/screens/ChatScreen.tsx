@@ -1,31 +1,121 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View,
   FlatList,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  View,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
-import { Text, Card, Button } from 'react-native-paper';
+import { IconButton, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
 import { aiService } from '../services/ai';
 import { db } from '../services/database';
-import { ChatMessage } from '../types';
-import { formatCurrency, formatDate } from '../utils/helpers';
+import { ChatMessage, Expense } from '../types';
+import { ChatBubble } from '../components/chat/ChatBubble';
+import { ExpenseConfirmationCard } from '../components/chat/ExpenseConfirmationCard';
+import { UndoDeleteCard } from '../components/chat/UndoDeleteCard';
+import { QuickPromptRow } from '../components/chat/QuickPromptRow';
+import { ChatComposer } from '../components/chat/ChatComposer';
+import { ExpenseEditModal } from '../components/shared/ExpenseEditModal';
+
+type SpeechPermissionResponse = { granted: boolean };
+type SpeechRecognitionModuleLike = {
+  start: (options: {
+    lang: string;
+    interimResults: boolean;
+    maxAlternatives: number;
+    continuous: boolean;
+    addsPunctuation: boolean;
+  }) => void;
+  stop: () => void;
+  requestPermissionsAsync: () => Promise<SpeechPermissionResponse>;
+};
+
+type SpeechRecognitionEventHook = (eventName: string, listener: (event: any) => void) => void;
+
+let speechModule: SpeechRecognitionModuleLike | null = null;
+let useSpeechRecognitionEventHook: SpeechRecognitionEventHook = () => undefined;
+
+try {
+  const speech = require('expo-speech-recognition') as {
+    ExpoSpeechRecognitionModule: SpeechRecognitionModuleLike;
+    useSpeechRecognitionEvent: SpeechRecognitionEventHook;
+  };
+  speechModule = speech.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEventHook = speech.useSpeechRecognitionEvent;
+} catch {
+  // Expo Go does not include this native module; we disable voice mode gracefully.
+}
 
 export const ChatScreen = () => {
-  const { userId, apiKey, refreshExpenses, lastDeletedExpense, setLastDeletedExpense } = useApp();
+  const navigation = useNavigation<any>();
+  const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
+  const { userId, refreshExpenses, lastDeletedExpense, setLastDeletedExpense } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [stableTabBarHeight, setStableTabBarHeight] = useState(tabBarHeight);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const isVoiceAvailable = Boolean(speechModule);
+
+  const addAssistantMessage = (content: string, ui_hint?: any) => {
+    const message: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content,
+      timestamp: Date.now(),
+      ui_hint,
+    };
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setMessages(prev => [...prev, message]);
+  };
 
   useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
     addSystemMessage('Hi! I\'m your expense tracking assistant. Try: "Spent 250 on coffee" or "How much did I spend this month?"');
   }, []);
+
+  useEffect(() => {
+    const showHandler = (event: any) => {
+      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
+    };
+    const hideHandler = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showWillSub = Keyboard.addListener('keyboardWillShow', showHandler);
+    const showDidSub = Keyboard.addListener('keyboardDidShow', showHandler);
+    const hideWillSub = Keyboard.addListener('keyboardWillHide', hideHandler);
+    const hideDidSub = Keyboard.addListener('keyboardDidHide', hideHandler);
+    const blurUnsubscribe = navigation.addListener('blur', hideHandler);
+
+    return () => {
+      showWillSub.remove();
+      showDidSub.remove();
+      hideWillSub.remove();
+      hideDidSub.remove();
+      blurUnsubscribe();
+    };
+  }, [navigation]);
+
+  useEffect(() => {
+    if (keyboardHeight === 0 && tabBarHeight > 0) {
+      setStableTabBarHeight(tabBarHeight);
+    }
+  }, [keyboardHeight, tabBarHeight]);
 
   const addSystemMessage = (content: string) => {
     const message: ChatMessage = {
@@ -37,8 +127,31 @@ export const ChatScreen = () => {
     setMessages(prev => [...prev, message]);
   };
 
+  useSpeechRecognitionEventHook('start', () => {
+    setIsListening(true);
+  });
+
+  useSpeechRecognitionEventHook('end', () => {
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEventHook('result', (event: any) => {
+    const transcript = event.results?.[0]?.transcript?.trim();
+    if (transcript) {
+      setInputText(transcript);
+    }
+  });
+
+  useSpeechRecognitionEventHook('error', (event: any) => {
+    setIsListening(false);
+    addAssistantMessage(`Voice input error: ${event?.message ?? 'Unknown error'}`);
+  });
+
   const handleSend = async () => {
     if (!inputText.trim() || isProcessing) return;
+    if (isListening && speechModule) {
+      speechModule.stop();
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -47,6 +160,7 @@ export const ChatScreen = () => {
       timestamp: Date.now(),
     };
 
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setMessages(prev => [...prev, userMessage]);
     const input = inputText;
     setInputText('');
@@ -84,6 +198,42 @@ export const ChatScreen = () => {
     }
   };
 
+  const handleSelectQuickPrompt = (prompt: string) => {
+    setInputText(prompt);
+  };
+
+  const handleVoiceToggle = async () => {
+    if (isProcessing) return;
+
+    if (isListening) {
+      speechModule?.stop();
+      return;
+    }
+
+    if (!speechModule) {
+      addAssistantMessage('Voice input needs a development build (not Expo Go).');
+      return;
+    }
+
+    const permission = await speechModule.requestPermissionsAsync();
+    if (!permission.granted) {
+      addAssistantMessage('Microphone permission is required for voice input.');
+      return;
+    }
+
+    try {
+      speechModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        maxAlternatives: 1,
+        continuous: false,
+        addsPunctuation: true,
+      });
+    } catch (error) {
+      addAssistantMessage('Unable to start voice input right now.');
+    }
+  };
+
   const handleAddExpense = async (aiResponse: any) => {
     try {
       if (!aiResponse.data?.amount) {
@@ -110,6 +260,7 @@ export const ChatScreen = () => {
         expense_data: expense,
       };
 
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setMessages(prev => [...prev, message]);
       await refreshExpenses();
     } catch (error) {
@@ -128,23 +279,13 @@ export const ChatScreen = () => {
     }
   };
 
-  const addAssistantMessage = (content: string, ui_hint?: any) => {
-    const message: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content,
-      timestamp: Date.now(),
-      ui_hint,
-    };
-    setMessages(prev => [...prev, message]);
-  };
-
   const handleDeleteExpense = async (expenseId: string) => {
     try {
       const expense = await db.getExpenseById(expenseId, userId);
       if (expense) {
         await db.deleteExpense(expenseId, userId);
         setLastDeletedExpense(expense);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         addAssistantMessage('Expense deleted. You can undo this action.', 'delete_undo');
         await refreshExpenses();
       }
@@ -153,11 +294,63 @@ export const ChatScreen = () => {
     }
   };
 
+  const handleEditExpense = (expense: Partial<Expense>) => {
+    if (
+      !expense.id ||
+      !expense.user_id ||
+      expense.amount === undefined ||
+      !expense.currency ||
+      !expense.category ||
+      !expense.date
+    ) {
+      addAssistantMessage('Unable to edit this expense. Please open it from Home and try again.');
+      return;
+    }
+
+    setEditingExpense(expense as Expense);
+  };
+
+  const handleSaveExpenseEdit = async (updates: {
+    amount: number;
+    category: string;
+    date: string;
+    notes?: string;
+  }) => {
+    if (!editingExpense) return;
+
+    const updated = await db.updateExpense(editingExpense.id, userId, updates);
+    if (!updated) {
+      addAssistantMessage('Failed to update expense.');
+      return;
+    }
+
+    setMessages(prev =>
+      prev.map(message => {
+        if (message.expense_data?.id !== editingExpense.id) {
+          return message;
+        }
+
+        return {
+          ...message,
+          expense_data: {
+            ...message.expense_data,
+            ...updates,
+          },
+        };
+      })
+    );
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    addAssistantMessage('Expense updated successfully.');
+    await refreshExpenses();
+    setEditingExpense(null);
+  };
+
   const handleUndoDelete = async () => {
     if (!lastDeletedExpense) return;
 
     try {
       await db.addExpense(lastDeletedExpense);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       addAssistantMessage('Expense restored successfully.');
       setLastDeletedExpense(null);
       await refreshExpenses();
@@ -168,87 +361,91 @@ export const ChatScreen = () => {
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     if (item.role === 'user') {
+      return <ChatBubble role="user" content={item.content} timestamp={item.timestamp} />;
+    }
+
+    if (item.ui_hint === 'confirmation_card' && item.expense_data) {
       return (
-        <View style={styles.userMessageContainer}>
-          <View style={styles.userMessage}>
-            <Text style={styles.userMessageText}>{item.content}</Text>
-          </View>
-        </View>
+        <ExpenseConfirmationCard
+          expense={item.expense_data}
+          onEdit={() => handleEditExpense(item.expense_data!)}
+          onDelete={() => handleDeleteExpense(item.expense_data!.id!)}
+        />
       );
     }
 
-    return (
-      <View style={styles.assistantMessageContainer}>
-        {item.ui_hint === 'confirmation_card' && item.expense_data ? (
-          <Card style={styles.confirmationCard}>
-            <Card.Content>
-              <Text style={styles.confirmationTitle}>Expense Added</Text>
-              <Text style={styles.confirmationAmount}>
-                {formatCurrency(item.expense_data.amount || 0, item.expense_data.currency)}
-              </Text>
-              <Text style={styles.confirmationCategory}>{item.expense_data.category}</Text>
-              <Text style={styles.confirmationDate}>
-                {formatDate(item.expense_data.date || '')}
-              </Text>
-              {item.expense_data.notes && (
-                <Text style={styles.confirmationNotes}>{item.expense_data.notes}</Text>
-              )}
-            </Card.Content>
-            <Card.Actions>
-              <Button onPress={() => handleDeleteExpense(item.expense_data!.id!)}>Delete</Button>
-            </Card.Actions>
-          </Card>
-        ) : item.ui_hint === 'delete_undo' && lastDeletedExpense ? (
-          <Card style={styles.undoCard}>
-            <Card.Content>
-              <Text>{item.content}</Text>
-            </Card.Content>
-            <Card.Actions>
-              <Button onPress={handleUndoDelete}>Undo</Button>
-            </Card.Actions>
-          </Card>
-        ) : (
-          <View style={styles.assistantMessage}>
-            <Text style={styles.assistantMessageText}>{item.content}</Text>
-          </View>
-        )}
-      </View>
-    );
+    if (item.ui_hint === 'delete_undo' && lastDeletedExpense) {
+      return <UndoDeleteCard message={item.content} onUndo={handleUndoDelete} />;
+    }
+
+    return <ChatBubble role="assistant" content={item.content} timestamp={item.timestamp} />;
   };
+
+  const dockedBottomOffset = Math.max(8, Math.round((stableTabBarHeight - insets.bottom) * 0.35));
+  const keyboardBottomOffset = 2;
+  const isKeyboardOpen = keyboardHeight > 0;
+  const composerBottomOffset = isKeyboardOpen ? keyboardBottomOffset : dockedBottomOffset;
+  const reservedComposerHeight = 88;
+  const typingFooter = isProcessing ? (
+    <View style={styles.typingFooter}>
+      <ChatBubble role="assistant" content="" isTyping />
+    </View>
+  ) : (
+    <View style={styles.listTailSpacer} />
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.messageList}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-      />
-
+      <View style={styles.bgOrbOne} />
+      <View style={styles.bgOrbTwo} />
       <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={90}
+        keyboardVerticalOffset={0}
+        enabled
       >
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Type your expense..."
-            multiline
-            maxLength={500}
-            editable={!isProcessing}
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, isProcessing && styles.sendButtonDisabled]}
-            onPress={handleSend}
-            disabled={isProcessing || !inputText.trim()}
-          >
-            <Text style={styles.sendButtonText}>Send</Text>
-          </TouchableOpacity>
+        <View style={styles.headerContainer}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>Smart Assistant</Text>
+            </View>
+            <IconButton icon="cog-outline" onPress={() => navigation.navigate('Settings')} />
+          </View>
+          <Text style={styles.headerTitle}>Your Expense Copilot</Text>
+          <Text style={styles.headerSubtitle}>Track, query, edit, and manage expenses in one beautiful flow.</Text>
         </View>
+        <QuickPromptRow onSelectPrompt={handleSelectQuickPrompt} />
+
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={item => item.id}
+          ListFooterComponent={typingFooter}
+          contentContainerStyle={[
+            styles.messageList,
+            { paddingBottom: dockedBottomOffset + reservedComposerHeight },
+          ]}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+          keyboardShouldPersistTaps="handled"
+        />
+
+        <ChatComposer
+          value={inputText}
+          onChangeText={setInputText}
+          onSend={handleSend}
+          onVoiceToggle={handleVoiceToggle}
+          voiceAvailable={isVoiceAvailable}
+          disabled={isProcessing}
+          isListening={isListening}
+          bottomOffset={composerBottomOffset}
+        />
+        <ExpenseEditModal
+          visible={Boolean(editingExpense)}
+          expense={editingExpense}
+          onDismiss={() => setEditingExpense(null)}
+          onSave={handleSaveExpenseEdit}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -257,105 +454,71 @@ export const ChatScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F3FF',
+  },
+  bgOrbOne: {
+    position: 'absolute',
+    top: -90,
+    right: -70,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#DDD6FE',
+    opacity: 0.75,
+  },
+  bgOrbTwo: {
+    position: 'absolute',
+    top: 140,
+    left: -60,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: '#BFDBFE',
+    opacity: 0.35,
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  headerBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EDE9FE',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerBadgeText: {
+    color: '#6D28D9',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1E1B4B',
+  },
+  headerSubtitle: {
+    marginTop: 4,
+    color: '#5B5F77',
+    fontSize: 14,
+    lineHeight: 20,
   },
   messageList: {
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 18,
   },
-  userMessageContainer: {
-    alignItems: 'flex-end',
-    marginBottom: 12,
+  typingFooter: {
+    paddingTop: 4,
   },
-  userMessage: {
-    backgroundColor: '#007AFF',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    maxWidth: '80%',
-  },
-  userMessageText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  assistantMessageContainer: {
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  assistantMessage: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    maxWidth: '80%',
-  },
-  assistantMessageText: {
-    color: '#000',
-    fontSize: 16,
-  },
-  confirmationCard: {
-    maxWidth: '80%',
-    backgroundColor: '#fff',
-  },
-  confirmationTitle: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  confirmationAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  confirmationCategory: {
-    fontSize: 16,
-    color: '#007AFF',
-    marginTop: 4,
-  },
-  confirmationDate: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  confirmationNotes: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  undoCard: {
-    maxWidth: '80%',
-    backgroundColor: '#FFF3CD',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    padding: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    fontSize: 16,
-    maxHeight: 100,
-  },
-  sendButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    justifyContent: 'center',
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  listTailSpacer: {
+    height: 4,
   },
 });

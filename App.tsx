@@ -3,48 +3,89 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppProvider } from './src/contexts/AppContext';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
+import { HistoryScreen } from './src/screens/HistoryScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { theme } from './src/theme';
 
 const Tab = createBottomTabNavigator();
 
 export default function App() {
   return (
-    <PaperProvider>
+    <PaperProvider theme={theme}>
       <AppProvider>
         <NavigationContainer>
           <Tab.Navigator
             screenOptions={{
-              tabBarActiveTintColor: '#007AFF',
+              sceneStyle: { backgroundColor: '#EEF2FF' },
+              tabBarActiveTintColor: '#7C3AED',
+              tabBarInactiveTintColor: '#64748B',
+              tabBarStyle: {
+                height: 74,
+                paddingTop: 8,
+                paddingBottom: 12,
+                marginHorizontal: 14,
+                marginBottom: 12,
+                borderRadius: 18,
+                borderTopWidth: 0,
+                backgroundColor: '#FFFFFF',
+                elevation: 0,
+                shadowColor: '#0F172A',
+                shadowOpacity: 0.14,
+                shadowRadius: 18,
+                shadowOffset: { width: 0, height: 8 },
+              },
+              tabBarLabelStyle: {
+                fontSize: 12,
+                fontWeight: '600',
+              },
               headerShown: false,
             }}
           >
-            <Tab.Screen 
-              name="Home" 
-              component={HomeScreen}
-              options={{
-                tabBarLabel: 'Home',
-              }}
-            />
             <Tab.Screen 
               name="Chat" 
               component={ChatScreen}
               options={{
                 tabBarLabel: 'Chat',
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="chat-processing-outline" color={color} size={size} />
+                ),
+              }}
+            />
+            <Tab.Screen 
+              name="Home" 
+              component={HomeScreen}
+              options={{
+                tabBarLabel: 'Home',
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="view-dashboard-outline" color={color} size={size} />
+                ),
+              }}
+            />
+            <Tab.Screen 
+              name="History" 
+              component={HistoryScreen}
+              options={{
+                tabBarLabel: 'History',
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="history" color={color} size={size} />
+                ),
               }}
             />
             <Tab.Screen 
               name="Settings" 
               component={SettingsScreen}
               options={{
-                tabBarLabel: 'Settings',
+                tabBarButton: () => null,
+                tabBarItemStyle: { display: 'none' },
               }}
             />
           </Tab.Navigator>
         </NavigationContainer>
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </AppProvider>
     </PaperProvider>
   );

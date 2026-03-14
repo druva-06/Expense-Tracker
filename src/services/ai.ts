@@ -1,4 +1,5 @@
 import { AIResponse, FIXED_CATEGORIES, Intent } from '../types';
+import { getDateRangeForPeriod } from '../utils/helpers';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
@@ -27,7 +28,8 @@ RULES:
 2. Date defaults to TODAY (${this.getTodayDate()}) unless specified
 3. Currency defaults to INR
 4. Map categories to one of these ONLY: ${FIXED_CATEGORIES.join(', ')}
-5. Respond with JSON + natural language text
+5. Preserve user detail in notes (merchant/item/reason like "movie", "uber ride", "coffee")
+6. Respond with JSON + natural language text
 
 INTENTS:
 - add_expense: User wants to add new expense
@@ -73,13 +75,12 @@ Now parse this input: "${userInput}"`;
           'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4',
+          model: 'gpt-3.5-turbo',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userInput }
           ],
           temperature: 0.3,
-          response_format: { type: 'json_object' },
         }),
       });
 
@@ -92,6 +93,9 @@ Now parse this input: "${userInput}"`;
 
       aiResponse.user_id = userId;
       aiResponse.offline_safe = true;
+      if (aiResponse.intent === 'add_expense' && aiResponse.data && !aiResponse.data.notes) {
+        aiResponse.data.notes = this.extractExpenseNotes(userInput);
+      }
 
       return aiResponse;
     } catch (error) {
@@ -102,15 +106,55 @@ Now parse this input: "${userInput}"`;
 
   private createFallbackResponse(userInput: string, userId: string): AIResponse {
     const lowerInput = userInput.toLowerCase();
+    const amountMatch = userInput.match(/(\d+(?:\.\d{1,2})?)/);
+    const hasQueryMarker =
+      lowerInput.includes('?') ||
+      lowerInput.includes('how much') ||
+      lowerInput.includes('total') ||
+      lowerInput.includes('show') ||
+      lowerInput.includes('list') ||
+      lowerInput.includes('summary') ||
+      lowerInput.includes('report') ||
+      lowerInput.includes('what did i spend') ||
+      lowerInput.includes('spending') ||
+      lowerInput.includes('expenses in') ||
+      lowerInput.includes('expenses for');
 
-    if (lowerInput.includes('how much') || lowerInput.includes('total') || lowerInput.includes('spent')) {
+    if (amountMatch && !hasQueryMarker) {
+      const amount = parseFloat(amountMatch[1]);
+      const category = this.inferCategory(userInput);
+      const notes = this.extractExpenseNotes(userInput);
+
+      return {
+        intent: 'add_expense',
+        user_id: userId,
+        offline_safe: true,
+        ui_hint: 'confirmation_card',
+        data: {
+          amount,
+          currency: 'INR',
+          category,
+          date: this.getTodayDate(),
+          notes,
+        },
+        response_text: `Added ₹${amount} under ${category} for today. You can edit or delete this if needed.`,
+      };
+    }
+
+    if (hasQueryMarker || lowerInput.includes('spent this month') || lowerInput.includes('spent this year')) {
+      const parsedDateRange = this.parseQueryDateRange(lowerInput);
       return {
         intent: 'query_expenses',
         user_id: userId,
         offline_safe: true,
         ui_hint: 'summary_card',
-        response_text: 'Let me fetch your expense summary...',
-        query: {},
+        response_text: parsedDateRange.periodLabel
+          ? `Let me fetch your expense summary for ${parsedDateRange.periodLabel}...`
+          : 'Let me fetch your expense summary...',
+        query: {
+          from_date: parsedDateRange.fromDate,
+          to_date: parsedDateRange.toDate,
+        },
       };
     }
 
@@ -136,26 +180,6 @@ Now parse this input: "${userInput}"`;
       };
     }
 
-    const amountMatch = userInput.match(/(\d+(?:\.\d{1,2})?)/);
-    if (amountMatch) {
-      const amount = parseFloat(amountMatch[1]);
-      const category = this.inferCategory(userInput);
-
-      return {
-        intent: 'add_expense',
-        user_id: userId,
-        offline_safe: true,
-        ui_hint: 'confirmation_card',
-        data: {
-          amount,
-          currency: 'INR',
-          category,
-          date: this.getTodayDate(),
-        },
-        response_text: `Added ₹${amount} under ${category} for today. You can edit or delete this if needed.`,
-      };
-    }
-
     return {
       intent: 'help',
       user_id: userId,
@@ -164,6 +188,68 @@ Now parse this input: "${userInput}"`;
       response_text: 'I can help you track expenses. Try: "Spent 250 on coffee" or "How much did I spend this month?"',
       clarification_question: 'What would you like to do?',
     };
+  }
+
+  private parseQueryDateRange(input: string): {
+    fromDate?: string;
+    toDate?: string;
+    periodLabel?: string;
+  } {
+    const monthMap: { name: string; short: string; month: number }[] = [
+      { name: 'january', short: 'Jan', month: 1 },
+      { name: 'february', short: 'Feb', month: 2 },
+      { name: 'march', short: 'Mar', month: 3 },
+      { name: 'april', short: 'Apr', month: 4 },
+      { name: 'may', short: 'May', month: 5 },
+      { name: 'june', short: 'Jun', month: 6 },
+      { name: 'july', short: 'Jul', month: 7 },
+      { name: 'august', short: 'Aug', month: 8 },
+      { name: 'september', short: 'Sep', month: 9 },
+      { name: 'october', short: 'Oct', month: 10 },
+      { name: 'november', short: 'Nov', month: 11 },
+      { name: 'december', short: 'Dec', month: 12 },
+    ];
+
+    const now = new Date();
+    const yearMatch = input.match(/\b(19|20)\d{2}\b/);
+    const selectedYear = yearMatch ? parseInt(yearMatch[0], 10) : now.getFullYear();
+    const matchedMonth = monthMap.find(
+      monthInfo => input.includes(monthInfo.name) || input.includes(monthInfo.short.toLowerCase())
+    );
+
+    if (input.includes('last month')) {
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const range = getDateRangeForPeriod(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1);
+      const label = `${monthMap[lastMonthDate.getMonth()].short} ${lastMonthDate.getFullYear()}`;
+      return { fromDate: range.fromDate, toDate: range.toDate, periodLabel: label };
+    }
+
+    if (input.includes('this month')) {
+      const range = getDateRangeForPeriod(now.getFullYear(), now.getMonth() + 1);
+      const label = `${monthMap[now.getMonth()].short} ${now.getFullYear()}`;
+      return { fromDate: range.fromDate, toDate: range.toDate, periodLabel: label };
+    }
+
+    if (input.includes('this year')) {
+      const range = getDateRangeForPeriod(now.getFullYear(), null);
+      return { fromDate: range.fromDate, toDate: range.toDate, periodLabel: `${now.getFullYear()}` };
+    }
+
+    if (matchedMonth) {
+      const range = getDateRangeForPeriod(selectedYear, matchedMonth.month);
+      return {
+        fromDate: range.fromDate,
+        toDate: range.toDate,
+        periodLabel: `${matchedMonth.short} ${selectedYear}`,
+      };
+    }
+
+    if (yearMatch) {
+      const range = getDateRangeForPeriod(selectedYear, null);
+      return { fromDate: range.fromDate, toDate: range.toDate, periodLabel: `${selectedYear}` };
+    }
+
+    return {};
   }
 
   private inferCategory(input: string): string {
@@ -192,6 +278,25 @@ Now parse this input: "${userInput}"`;
     }
 
     return 'Miscellaneous';
+  }
+
+  private extractExpenseNotes(input: string): string | undefined {
+    const cleaned = input
+      .toLowerCase()
+      .replace(/\b(spent|pay|paid|for|on|rs|inr|rupees?|expense|add)\b/g, ' ')
+      .replace(/\d+(?:\.\d{1,2})?/g, ' ')
+      .replace(/[^\w\s&-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned || cleaned.length < 2) {
+      return undefined;
+    }
+
+    return cleaned
+      .split(' ')
+      .map(word => (word.length > 2 ? `${word[0].toUpperCase()}${word.slice(1)}` : word))
+      .join(' ');
   }
 
   async generateInsight(expenses: any[], queryType?: string): Promise<string> {

@@ -218,6 +218,47 @@ class DatabaseService {
 
     return result;
   }
+
+  async replaceExpensesForUser(
+    userId: string,
+    expenses: Array<
+      Pick<
+        Expense,
+        'id' | 'amount' | 'currency' | 'category' | 'payment_method' | 'date' | 'notes' | 'created_at' | 'updated_at'
+      >
+    >
+  ): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execAsync('BEGIN TRANSACTION');
+    try {
+      await this.db.runAsync('DELETE FROM expenses WHERE user_id = ?', [userId]);
+
+      for (const expense of expenses) {
+        await this.db.runAsync(
+          `INSERT INTO expenses (id, user_id, amount, currency, category, payment_method, date, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            expense.id,
+            userId,
+            expense.amount,
+            expense.currency || 'INR',
+            expense.category,
+            expense.payment_method || null,
+            expense.date,
+            expense.notes || null,
+            expense.created_at,
+            expense.updated_at,
+          ]
+        );
+      }
+
+      await this.db.execAsync('COMMIT');
+    } catch (error) {
+      await this.db.execAsync('ROLLBACK');
+      throw error;
+    }
+  }
 }
 
 export const db = new DatabaseService();
