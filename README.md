@@ -1,94 +1,117 @@
-# Expense Tracker - AI-Powered Mobile App
+# Expense Tracker App
 
-An offline-first expense tracking mobile app (iOS & Android) built with React Native and Expo. Features a chat-based AI assistant for effortless expense entry.
+A React Native + Expo mobile app for tracking expenses through a chat-first workflow, with local SQLite storage and optional OpenAI-powered parsing.
 
-## 🎯 Features
+## Current status
 
-- **Chat-Based Interface**: Natural language expense entry ("Spent 250 on coffee")
-- **AI-Powered**: OpenAI integration for intelligent expense parsing
-- **Offline-First**: All data stored locally with SQLite
-- **Smart Category Mapping**: Automatic categorization of expenses
-- **Monthly Insights**: View spending by category and time period
-- **Edit & Delete with Undo**: Safe expense management
-- **Cross-Platform**: Runs on both iOS and Android
+- Cross-platform app (iOS and Android)
+- Local-first data storage using Expo SQLite
+- 4 main tabs/screens: `Chat`, `Home`, `History`, `Settings`
+- Chat actions currently require a valid OpenAI API key
+- Backup and restore (JSON export/import) available in Settings
+- Voice input supported in development builds (not Expo Go)
 
-## 🏗️ Architecture
+## Features
 
-- **Frontend**: React Native + Expo (TypeScript)
-- **Storage**: Expo SQLite (offline-first)
-- **AI**: OpenAI API (with fallback parser)
-- **Navigation**: React Navigation (Bottom Tabs)
-- **UI**: React Native Paper (Material Design)
-- **State**: React Context API
+- Chat-based expense entry and queries
+- Edit and delete with undo support
+- Monthly/year/all-time filtering and search in History
+- Category breakdown and totals on Home
+- Local backup export and import/replace
+- API key management in Settings
 
-## 📱 Screens
+## Screens
 
-1. **Home**: Monthly summary, category breakdown, recent expenses
-2. **Chat**: AI assistant for adding/querying expenses
-3. **Settings**: OpenAI API key configuration
+- **Chat**: Send natural-language requests, view confirmations, edit/delete entries
+- **Home**: Period totals and category donut breakdown
+- **History**: Search, date-range filters, grouped transactions, inline edit/delete
+- **Settings**: OpenAI key, backup/restore, app info
 
-## 🚀 Getting Started
+## Tech stack
+
+- React Native `0.81.5`
+- Expo SDK `~54.0.33`
+- TypeScript `~5.9.2`
+- Expo SQLite `~16.0.0`
+- React Navigation `^7.0.12`
+- React Native Paper `^5.12.3`
+- AsyncStorage `2.2.0`
+- Expo speech recognition (voice input): `^3.1.1`
+
+## Getting started
 
 ### Prerequisites
 
-- Node.js (v20+)
-- npm or yarn
-- Expo CLI
-- iOS Simulator (Mac) or Android Emulator
-- OpenAI API key (optional, for AI features)
+- Node.js (recommended: v20+)
+- npm or Yarn
+- iOS Simulator (macOS) and/or Android Emulator
 
-### Installation
+### Install
 
-1. **Clone the repository**
-   ```bash
-   cd expense-tracker-app
-   ```
+```bash
+cd expense-tracker-app
+npm install --legacy-peer-deps
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
+If you prefer Yarn:
 
-3. **Start the development server**
-   ```bash
-   npm start
-   # or
-   expo start
-   ```
+```bash
+yarn install
+```
 
-4. **Run on device/simulator**
-   - Press `i` for iOS simulator
-   - Press `a` for Android emulator
-   - Scan QR code with Expo Go app for physical device
+### Run
 
-### Configuration
+```bash
+npm start
+```
 
-1. **OpenAI API Key** (Optional)
-   - Get your API key from: https://platform.openai.com/api-keys
-   - Enter it in the Settings screen of the app
-   - Without an API key, the app uses basic pattern matching
+Useful script commands:
 
-## 📊 Data Model
+```bash
+npm run ios
+npm run android
+npm run web
+```
 
-### Expense
-```typescript
+Or run the quick setup helper:
+
+```bash
+./quickstart.sh
+```
+
+## OpenAI setup
+
+1. Open the app
+2. Go to `Settings`
+3. Add your OpenAI API key (`sk-...`)
+
+Without a valid API key, chat add/query/edit/delete actions are blocked and the assistant will prompt you to configure the key.
+
+## Voice input notes
+
+- Voice input is wired through `expo-speech-recognition`
+- It works in a development build
+- It does **not** work in Expo Go
+
+## Data model
+
+```ts
 {
-  id: string           // UUID
-  user_id: string      // Auto-generated user ID
-  amount: number       // Expense amount
-  currency: string     // Default: "INR"
-  category: string     // One of 14 fixed categories
-  payment_method?: string  // Optional
-  date: string         // YYYY-MM-DD
-  notes?: string       // Optional
-  created_at: number   // Timestamp
-  updated_at: number   // Timestamp
+  id: string
+  user_id: string
+  amount: number
+  currency: string
+  category: string
+  payment_method?: string
+  date: string // YYYY-MM-DD
+  notes?: string
+  created_at: number
+  updated_at: number
 }
 ```
 
-### Fixed Categories
+Fixed categories:
+
 - Food & Dining
 - Groceries
 - Transport
@@ -104,149 +127,36 @@ An offline-first expense tracking mobile app (iOS & Android) built with React Na
 - Gifts & Donations
 - Miscellaneous
 
-## 🤖 AI Assistant Capabilities
+## Project structure
 
-The AI assistant supports these intents:
-
-1. **Add Expense**: "Spent 250 on coffee", "Paid 500 for Uber"
-2. **Query Expenses**: "How much did I spend this month?", "Show groceries"
-3. **Edit Expense**: "Change that to 300"
-4. **Delete Expense**: "Delete yesterday's expense"
-5. **Help**: General assistance
-
-### Example Conversations
-
-```
-User: "Spent 250 on coffee"
-App: "Added ₹250 under Food & Dining for today. You can edit or delete this if needed."
-
-User: "How much on transport this month?"
-App: "Total: ₹1,450 across 8 expenses. Highest spending: Transport (₹1,450)."
-
-User: "Delete that"
-App: "Expense deleted. You can undo this action." [Undo button shown]
-```
-
-## 🗂️ Project Structure
-
-```
+```text
 expense-tracker-app/
 ├── src/
-│   ├── components/      # Reusable UI components
-│   ├── contexts/        # React Context (AppContext)
-│   ├── screens/         # Main screens (Home, Chat, Settings)
-│   ├── services/        # Business logic (AI, Database)
-│   ├── types/           # TypeScript types
-│   └── utils/           # Helper functions (storage, formatting)
-├── App.tsx              # Main app entry point
-├── package.json         # Dependencies
-└── README.md            # This file
+│   ├── components/
+│   ├── contexts/
+│   ├── screens/
+│   ├── services/
+│   ├── theme/
+│   ├── types/
+│   └── utils/
+├── App.tsx
+├── README.md
+├── SETUP.md
+└── BUILD_SUMMARY.md
 ```
 
-## 🔧 Key Services
+## Security and privacy
 
-### DatabaseService (`src/services/database.ts`)
-- SQLite operations (CRUD)
-- Expense queries with filters
-- Category totals and insights
+- Expense data is stored locally on device (SQLite)
+- API key is stored in AsyncStorage on device
+- No backend data sync is implemented in this repo
 
-### AIService (`src/services/ai.ts`)
-- OpenAI integration
-- Intent classification
-- Fallback parser (works offline)
-- Category inference
+## Documentation
 
-### Storage (`src/utils/storage.ts`)
-- AsyncStorage wrapper
-- API key management
-- User ID persistence
+- `SETUP.md`: environment setup and troubleshooting
+- `BUILD_SUMMARY.md`: build overview
+- `ARCHITECTURE.md`: architecture and flow diagrams
 
-## 📝 Development Notes
-
-### Offline-First Principles
-- All expenses stored locally in SQLite
-- AI parsing works with fallback when API unavailable
-- No cloud sync (pure offline)
-- Idempotent operations
-
-### UX Principles
-- Minimize cognitive load
-- Confirmation cards for adds
-- Undo for destructive actions
-- Clear error messages
-- No forms unless necessary
-
-## 🧪 Testing
-
-Run on iOS:
-```bash
-npm run ios
-```
-
-Run on Android:
-```bash
-npm run android
-```
-
-## 📦 Building for Production
-
-### iOS
-```bash
-eas build --platform ios
-```
-
-### Android
-```bash
-eas build --platform android
-```
-
-Note: Requires Expo Application Services (EAS) account
-
-## 🔐 Security
-
-- API keys stored in AsyncStorage (encrypted by OS)
-- No hardcoded secrets
-- All data stays on device
-- No telemetry or tracking
-
-## 🛠️ Tech Stack
-
-- **React Native** 0.81.5
-- **Expo** ~54.0
-- **TypeScript** ~5.9
-- **Expo SQLite** ~16.0
-- **React Navigation** ^7.0
-- **React Native Paper** ^5.12
-- **OpenAI API** (gpt-4)
-
-## 📈 Future Enhancements
-
-- [ ] Voice input support
-- [ ] Cloud sync (optional)
-- [ ] Budget tracking
-- [ ] Recurring expenses
-- [ ] Export to CSV/PDF
-- [ ] Biometric authentication
-- [ ] Dark mode
-- [ ] Multi-currency support
-- [ ] Receipt photo capture
-
-## 🐛 Known Issues
-
-- None currently
-
-## 📄 License
+## License
 
 MIT
-
-## 🤝 Contributing
-
-Contributions welcome! Please open an issue or PR.
-
-## 💬 Support
-
-For questions or issues, please open a GitHub issue.
-
----
-
-**Built with ❤️ using React Native and Expo**
