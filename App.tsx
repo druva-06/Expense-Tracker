@@ -1,9 +1,11 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect } from 'react';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as NavigationBar from 'expo-navigation-bar';
+import { Platform } from 'react-native';
 import { AppProvider } from './src/contexts/AppContext';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
@@ -11,13 +13,30 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { theme } from './src/theme';
 
+const navigationTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: '#EEF2FF',
+  },
+};
+
 const Tab = createBottomTabNavigator();
 
 export default function App() {
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    void NavigationBar.setBackgroundColorAsync('#EEF2FF');
+    void NavigationBar.setButtonStyleAsync('dark');
+  }, []);
+
   return (
     <PaperProvider theme={theme}>
       <AppProvider>
-        <NavigationContainer>
+        <NavigationContainer theme={navigationTheme}>
           <Tab.Navigator
             screenOptions={{
               sceneStyle: { backgroundColor: '#EEF2FF' },
