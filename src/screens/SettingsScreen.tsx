@@ -197,8 +197,8 @@ export const SettingsScreen = () => {
 
         <SettingsSectionCard title="OpenAI API Key" icon="key-outline">
             <Text style={styles.description}>
-              Enter your OpenAI API key to enable intelligent expense parsing. Without it, the app will
-              use basic pattern matching.
+              Enter your OpenAI API key to enable chat-based expense actions. Without a valid key,
+              chat add/query/edit/delete will be blocked.
             </Text>
             <TextInput
               mode="outlined"

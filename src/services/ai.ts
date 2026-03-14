@@ -17,7 +17,7 @@ class AIService {
 
   async parseExpenseInput(userInput: string, userId: string): Promise<AIResponse> {
     if (!this.apiKey) {
-      return this.createFallbackResponse(userInput, userId);
+      return this.createApiKeyRequiredResponse(userId);
     }
 
     try {
@@ -85,6 +85,9 @@ Now parse this input: "${userInput}"`;
       });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return this.createInvalidApiKeyResponse(userId);
+        }
         throw new Error(`OpenAI API error: ${response.status}`);
       }
 
@@ -100,8 +103,43 @@ Now parse this input: "${userInput}"`;
       return aiResponse;
     } catch (error) {
       console.error('AI parsing error:', error);
-      return this.createFallbackResponse(userInput, userId);
+      return this.createAIUnavailableResponse(userId);
     }
+  }
+
+  private createApiKeyRequiredResponse(userId: string): AIResponse {
+    return {
+      intent: 'help',
+      user_id: userId,
+      offline_safe: true,
+      ui_hint: 'clarification',
+      response_text: 'OpenAI API key is required. Please add your API key in Settings to use chat expense actions.',
+      clarification_question: 'Please add your API key in Settings.',
+    };
+  }
+
+  private createInvalidApiKeyResponse(userId: string): AIResponse {
+    return {
+      intent: 'help',
+      user_id: userId,
+      offline_safe: true,
+      ui_hint: 'clarification',
+      response_text:
+        'Your OpenAI API key appears invalid or expired. Please update it in Settings to continue chat actions.',
+      clarification_question: 'Please update your API key in Settings.',
+    };
+  }
+
+  private createAIUnavailableResponse(userId: string): AIResponse {
+    return {
+      intent: 'help',
+      user_id: userId,
+      offline_safe: true,
+      ui_hint: 'clarification',
+      response_text:
+        'OpenAI service is currently unavailable. Please try again shortly. No expense was added from this request.',
+      clarification_question: 'Retry once OpenAI service is available.',
+    };
   }
 
   private createFallbackResponse(userInput: string, userId: string): AIResponse {
