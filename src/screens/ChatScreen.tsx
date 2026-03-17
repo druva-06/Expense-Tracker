@@ -8,6 +8,7 @@ import {
   View,
   LayoutAnimation,
   UIManager,
+  Alert,
 } from 'react-native';
 import { IconButton, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
+import { MAX_QUICK_PROMPTS } from '../contexts/AppContext';
 import { aiService } from '../services/ai';
 import { db } from '../services/database';
 import { ChatMessage, Expense } from '../types';
@@ -58,7 +60,14 @@ export const ChatScreen = () => {
   const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
-  const { userId, quickPrompts, refreshExpenses, lastDeletedExpense, setLastDeletedExpense } = useApp();
+  const {
+    userId,
+    quickPrompts,
+    saveQuickPrompts,
+    refreshExpenses,
+    lastDeletedExpense,
+    setLastDeletedExpense,
+  } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,6 +75,7 @@ export const ChatScreen = () => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [stableTabBarHeight, setStableTabBarHeight] = useState(tabBarHeight);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [isSavingPrompts, setIsSavingPrompts] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const isVoiceAvailable = Boolean(speechModule);
 
@@ -200,6 +210,44 @@ export const ChatScreen = () => {
 
   const handleSelectQuickPrompt = (prompt: string) => {
     setInputText(prompt);
+  };
+
+  const handleAddQuickPrompt = async () => {
+    const nextPrompt = inputText.trim();
+    if (!nextPrompt) {
+      Alert.alert('Type first', 'Type your message in the composer, then tap + to save it as a quick prompt.');
+      return;
+    }
+
+    if (quickPrompts.length >= MAX_QUICK_PROMPTS) {
+      Alert.alert('Prompt limit reached', `You can add up to ${MAX_QUICK_PROMPTS} quick prompts.`);
+      return;
+    }
+
+    if (quickPrompts.some(prompt => prompt.toLowerCase() === nextPrompt.toLowerCase())) {
+      Alert.alert('Duplicate prompt', 'This quick prompt already exists.');
+      return;
+    }
+
+    setIsSavingPrompts(true);
+    try {
+      await saveQuickPrompts([...quickPrompts, nextPrompt]);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save quick prompts.');
+    } finally {
+      setIsSavingPrompts(false);
+    }
+  };
+
+  const handleRemoveQuickPrompt = async (promptToRemove: string) => {
+    setIsSavingPrompts(true);
+    try {
+      await saveQuickPrompts(quickPrompts.filter(prompt => prompt !== promptToRemove));
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update quick prompts.');
+    } finally {
+      setIsSavingPrompts(false);
+    }
   };
 
   const handleVoiceToggle = async () => {
@@ -416,8 +464,11 @@ export const ChatScreen = () => {
         </View>
         <QuickPromptRow
           prompts={quickPrompts}
+          maxPrompts={MAX_QUICK_PROMPTS}
           onSelectPrompt={handleSelectQuickPrompt}
-          onCustomize={() => navigation.navigate('Settings')}
+          onAddPrompt={handleAddQuickPrompt}
+          onRemovePrompt={handleRemoveQuickPrompt}
+          isSaving={isSavingPrompts}
         />
 
         <FlatList

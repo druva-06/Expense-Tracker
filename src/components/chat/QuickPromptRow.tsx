@@ -4,11 +4,21 @@ import { Chip, Text } from 'react-native-paper';
 
 interface QuickPromptRowProps {
   prompts: string[];
+  maxPrompts: number;
   onSelectPrompt: (prompt: string) => void;
-  onCustomize: () => void;
+  onAddPrompt: () => Promise<void>;
+  onRemovePrompt: (prompt: string) => Promise<void>;
+  isSaving: boolean;
 }
 
-export const QuickPromptRow = ({ prompts, onSelectPrompt, onCustomize }: QuickPromptRowProps) => {
+export const QuickPromptRow = ({
+  prompts,
+  maxPrompts,
+  onSelectPrompt,
+  onAddPrompt,
+  onRemovePrompt,
+  isSaving,
+}: QuickPromptRowProps) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -24,6 +34,8 @@ export const QuickPromptRow = ({ prompts, onSelectPrompt, onCustomize }: QuickPr
     LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
   }, [prompts]);
 
+  const canAddPrompt = prompts.length < maxPrompts;
+
   return (
     <Animated.View
       style={[styles.wrapper, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({
@@ -32,22 +44,37 @@ export const QuickPromptRow = ({ prompts, onSelectPrompt, onCustomize }: QuickPr
       }) }] }]}
     >
       <View style={styles.titleRow}>
-        <Text style={styles.title}>Try quick prompts</Text>
-        <Text style={styles.customizeLink} onPress={onCustomize}>
-          Customize
-        </Text>
+        <View>
+          <Text style={styles.title}>Try quick prompts</Text>
+        </View>
       </View>
-      {prompts.length === 0 ? (
-        <Text style={styles.emptyText}>No prompts yet. Tap Customize to add up to 3 prompts.</Text>
-      ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.content}>
-          {prompts.map(prompt => (
-            <Chip key={prompt} mode="outlined" style={styles.chip} onPress={() => onSelectPrompt(prompt)}>
-              {prompt}
-            </Chip>
-          ))}
-        </ScrollView>
-      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {prompts.map(prompt => (
+          <Chip
+            key={prompt}
+            mode="outlined"
+            style={styles.chip}
+            textStyle={styles.chipText}
+            onPress={() => onSelectPrompt(prompt)}
+            onClose={() => onRemovePrompt(prompt)}
+            closeIcon="close-circle"
+            disabled={isSaving}
+          >
+            {prompt}
+          </Chip>
+        ))}
+        {canAddPrompt && (
+          <Chip
+            icon="plus"
+            mode="outlined"
+            style={styles.addChip}
+            onPress={onAddPrompt}
+            disabled={isSaving}
+          >
+            Add
+          </Chip>
+        )}
+      </ScrollView>
     </Animated.View>
   );
 };
@@ -69,11 +96,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  customizeLink: {
-    color: '#6D28D9',
-    fontSize: 12,
-    fontWeight: '700',
-  },
   content: {
     paddingHorizontal: 16,
     paddingRight: 20,
@@ -83,10 +105,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderColor: '#C4B5FD',
     borderRadius: 14,
+    paddingRight: 2,
   },
-  emptyText: {
-    paddingHorizontal: 16,
-    color: '#6B7280',
-    fontSize: 12,
+  chipText: {
+    color: '#312E81',
+  },
+  addChip: {
+    marginRight: 8,
+    backgroundColor: '#EDE9FE',
+    borderColor: '#A78BFA',
+    borderStyle: 'dashed',
+    borderRadius: 14,
   },
 });
