@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Alert } from 'react-native';
-import { Text, TextInput, Button } from 'react-native-paper';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Alert, LayoutAnimation, View, Platform, UIManager } from 'react-native';
+import { Text, TextInput, Button, IconButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
 import { SettingsSectionCard } from '../components/settings/SettingsSectionCard';
@@ -9,6 +9,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { db } from '../services/database';
 import { Expense } from '../types';
+import { DEFAULT_OPENAI_MODEL } from '../services/ai';
+import { DEFAULT_QUICK_PROMPTS, MAX_QUICK_PROMPTS } from '../contexts/AppContext';
 
 type BackupPayload = {
   version: number;
@@ -18,11 +20,46 @@ type BackupPayload = {
 };
 
 export const SettingsScreen = () => {
-  const { apiKey, setApiKey, clearApiKey, userId, refreshExpenses } = useApp();
+  const {
+    apiKey,
+    aiModel,
+    quickPrompts,
+    setApiKey,
+    clearApiKey,
+    setAiModel,
+    resetAiModel,
+    saveQuickPrompts,
+    resetQuickPrompts,
+    userId,
+    refreshExpenses,
+  } = useApp();
   const [apiKeyInput, setApiKeyInput] = useState(apiKey || '');
+  const [aiModelInput, setAiModelInput] = useState(aiModel);
+  const [promptInput, setPromptInput] = useState('');
+  const [editableQuickPrompts, setEditableQuickPrompts] = useState<string[]>(quickPrompts);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingModel, setIsSavingModel] = useState(false);
+  const [isSavingPrompts, setIsSavingPrompts] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+
+  useEffect(() => {
+    setApiKeyInput(apiKey || '');
+  }, [apiKey]);
+
+  useEffect(() => {
+    setAiModelInput(aiModel);
+  }, [aiModel]);
+
+  useEffect(() => {
+    setEditableQuickPrompts(quickPrompts);
+  }, [quickPrompts]);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
 
   const handleSaveApiKey = async () => {
     if (!apiKeyInput.trim()) {
@@ -61,6 +98,113 @@ export const SettingsScreen = () => {
             Alert.alert('Error', 'Failed to delete API key.');
           } finally {
             setIsSaving(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSaveAiModel = async () => {
+    if (!aiModelInput.trim()) {
+      Alert.alert('Error', 'Please enter a valid model name');
+      return;
+    }
+
+    setIsSavingModel(true);
+    try {
+      await setAiModel(aiModelInput.trim());
+      Alert.alert('Success', 'AI model saved successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save AI model');
+    } finally {
+      setIsSavingModel(false);
+    }
+  };
+
+  const handleResetAiModel = () => {
+    if (isSavingModel) {
+      return;
+    }
+
+    Alert.alert('Reset AI model', `Switch back to default model (${DEFAULT_OPENAI_MODEL})?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset',
+        onPress: async () => {
+          setIsSavingModel(true);
+          try {
+            await resetAiModel();
+            setAiModelInput(DEFAULT_OPENAI_MODEL);
+            Alert.alert('Done', `AI model reset to ${DEFAULT_OPENAI_MODEL}.`);
+          } catch (error) {
+            Alert.alert('Error', 'Failed to reset AI model.');
+          } finally {
+            setIsSavingModel(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleAddQuickPrompt = () => {
+    const nextPrompt = promptInput.trim();
+    if (!nextPrompt) {
+      Alert.alert('Error', 'Please enter a prompt to add.');
+      return;
+    }
+
+    if (editableQuickPrompts.includes(nextPrompt)) {
+      Alert.alert('Duplicate prompt', 'This quick prompt already exists.');
+      return;
+    }
+
+    if (editableQuickPrompts.length >= MAX_QUICK_PROMPTS) {
+      Alert.alert('Prompt limit reached', `You can add up to ${MAX_QUICK_PROMPTS} quick prompts.`);
+      return;
+    }
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    setEditableQuickPrompts(prev => [...prev, nextPrompt]);
+    setPromptInput('');
+  };
+
+  const handleRemoveQuickPrompt = (promptToRemove: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    setEditableQuickPrompts(prev => prev.filter(prompt => prompt !== promptToRemove));
+  };
+
+  const handleSaveQuickPrompts = async () => {
+    setIsSavingPrompts(true);
+    try {
+      await saveQuickPrompts(editableQuickPrompts);
+      Alert.alert('Success', 'Quick prompts saved successfully.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save quick prompts.');
+    } finally {
+      setIsSavingPrompts(false);
+    }
+  };
+
+  const handleResetQuickPrompts = () => {
+    if (isSavingPrompts) {
+      return;
+    }
+
+    Alert.alert('Reset quick prompts', 'Restore the default quick prompts?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset',
+        onPress: async () => {
+          setIsSavingPrompts(true);
+          try {
+            await resetQuickPrompts();
+            setEditableQuickPrompts(DEFAULT_QUICK_PROMPTS);
+            setPromptInput('');
+            Alert.alert('Done', 'Quick prompts were reset to defaults.');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to reset quick prompts.');
+          } finally {
+            setIsSavingPrompts(false);
           }
         },
       },
@@ -231,6 +375,100 @@ export const SettingsScreen = () => {
             </Text>
         </SettingsSectionCard>
 
+        <SettingsSectionCard title="OpenAI Model" icon="tune-variant">
+            <Text style={styles.description}>
+              Choose the model used for chat parsing (for example: gpt-4o-mini, gpt-5-nano).
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="Model"
+              value={aiModelInput}
+              onChangeText={setAiModelInput}
+              style={styles.input}
+              placeholder={DEFAULT_OPENAI_MODEL}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Button
+              mode="contained"
+              onPress={handleSaveAiModel}
+              loading={isSavingModel}
+              disabled={isSavingModel}
+              style={styles.button}
+            >
+              Update Model
+            </Button>
+            <Button
+              mode="text"
+              onPress={handleResetAiModel}
+              disabled={isSavingModel || aiModel === DEFAULT_OPENAI_MODEL}
+            >
+              Reset to Default ({DEFAULT_OPENAI_MODEL})
+            </Button>
+        </SettingsSectionCard>
+
+        <SettingsSectionCard title="Quick Prompts" icon="flash-outline">
+            <Text style={styles.description}>
+              Build your own quick prompts for chat. You can keep up to {MAX_QUICK_PROMPTS} prompts for a clean and fast workflow.
+            </Text>
+            <Text style={styles.counterText}>
+              {editableQuickPrompts.length}/{MAX_QUICK_PROMPTS} prompts used
+            </Text>
+            <View style={styles.promptInputRow}>
+              <TextInput
+                mode="outlined"
+                label="New quick prompt"
+                value={promptInput}
+                onChangeText={setPromptInput}
+                style={styles.promptInput}
+                placeholder="e.g. Spent 899 on groceries"
+                autoCapitalize="sentences"
+                autoCorrect
+              />
+              <Button
+                mode="contained"
+                onPress={handleAddQuickPrompt}
+                disabled={editableQuickPrompts.length >= MAX_QUICK_PROMPTS || isSavingPrompts}
+                style={styles.addPromptButton}
+              >
+                Add
+              </Button>
+            </View>
+            <View style={styles.promptList}>
+              {editableQuickPrompts.length === 0 ? (
+                <Text style={styles.hint}>No prompts yet. Add one above to get started.</Text>
+              ) : (
+                editableQuickPrompts.map(prompt => (
+                  <View key={prompt} style={styles.promptCard}>
+                    <Text style={styles.promptText}>{prompt}</Text>
+                    <IconButton
+                      icon="close-circle-outline"
+                      size={20}
+                      onPress={() => handleRemoveQuickPrompt(prompt)}
+                      disabled={isSavingPrompts}
+                    />
+                  </View>
+                ))
+              )}
+            </View>
+            <Button
+              mode="contained"
+              onPress={handleSaveQuickPrompts}
+              loading={isSavingPrompts}
+              disabled={isSavingPrompts}
+              style={styles.button}
+            >
+              Save Quick Prompts
+            </Button>
+            <Button
+              mode="text"
+              onPress={handleResetQuickPrompts}
+              disabled={isSavingPrompts}
+            >
+              Reset to Default Prompts
+            </Button>
+        </SettingsSectionCard>
+
         <SettingsSectionCard title="Backup & Restore" icon="database-export-outline">
             <Text style={styles.description}>
               Export your current local data as a backup file, or import a backup to restore expenses.
@@ -306,6 +544,47 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 16,
+  },
+  promptInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  promptInput: {
+    flex: 1,
+    marginRight: 8,
+  },
+  addPromptButton: {
+    marginBottom: 16,
+  },
+  promptList: {
+    marginBottom: 8,
+  },
+  promptCard: {
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 12,
+    marginBottom: 8,
+    paddingLeft: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#7C3AED',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  promptText: {
+    color: '#312E81',
+    flex: 1,
+    paddingVertical: 10,
+  },
+  counterText: {
+    color: '#6D28D9',
+    fontWeight: '700',
+    marginBottom: 10,
   },
   button: {
     marginBottom: 8,

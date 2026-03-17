@@ -1,29 +1,54 @@
-import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, LayoutAnimation, ScrollView, StyleSheet, View } from 'react-native';
 import { Chip, Text } from 'react-native-paper';
 
-const QUICK_PROMPTS = [
-  'Spent 250 on coffee',
-  'Show expenses for this month',
-  'Show expenses for March 2026',
-];
-
 interface QuickPromptRowProps {
+  prompts: string[];
   onSelectPrompt: (prompt: string) => void;
+  onCustomize: () => void;
 }
 
-export const QuickPromptRow = ({ onSelectPrompt }: QuickPromptRowProps) => {
+export const QuickPromptRow = ({ prompts, onSelectPrompt, onCustomize }: QuickPromptRowProps) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(fadeAnim, {
+      toValue: 1,
+      speed: 16,
+      bounciness: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
+
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+  }, [prompts]);
+
   return (
-    <View style={styles.wrapper}>
-      <Text style={styles.title}>Try quick prompts</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {QUICK_PROMPTS.map(prompt => (
-          <Chip key={prompt} mode="outlined" style={styles.chip} onPress={() => onSelectPrompt(prompt)}>
-            {prompt}
-          </Chip>
-        ))}
-      </ScrollView>
-    </View>
+    <Animated.View
+      style={[styles.wrapper, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [8, 0],
+      }) }] }]}
+    >
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>Try quick prompts</Text>
+        <Text style={styles.customizeLink} onPress={onCustomize}>
+          Customize
+        </Text>
+      </View>
+      {prompts.length === 0 ? (
+        <Text style={styles.emptyText}>No prompts yet. Tap Customize to add up to 3 prompts.</Text>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.content}>
+          {prompts.map(prompt => (
+            <Chip key={prompt} mode="outlined" style={styles.chip} onPress={() => onSelectPrompt(prompt)}>
+              {prompt}
+            </Chip>
+          ))}
+        </ScrollView>
+      )}
+    </Animated.View>
   );
 };
 
@@ -33,11 +58,21 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   title: {
-    paddingHorizontal: 16,
     fontSize: 13,
     fontWeight: '700',
     color: '#4C1D95',
+  },
+  titleRow: {
+    paddingHorizontal: 16,
     marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  customizeLink: {
+    color: '#6D28D9',
+    fontSize: 12,
+    fontWeight: '700',
   },
   content: {
     paddingHorizontal: 16,
@@ -48,5 +83,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderColor: '#C4B5FD',
     borderRadius: 14,
+  },
+  emptyText: {
+    paddingHorizontal: 16,
+    color: '#6B7280',
+    fontSize: 12,
   },
 });

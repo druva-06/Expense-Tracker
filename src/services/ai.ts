@@ -2,12 +2,19 @@ import { AIResponse, FIXED_CATEGORIES, Intent } from '../types';
 import { getDateRangeForPeriod } from '../utils/helpers';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+export const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 
 class AIService {
   private apiKey: string = '';
+  private model: string = DEFAULT_OPENAI_MODEL;
 
   setApiKey(key: string) {
     this.apiKey = key;
+  }
+
+  setModel(model: string) {
+    const cleanedModel = model.trim();
+    this.model = cleanedModel || DEFAULT_OPENAI_MODEL;
   }
 
   private getTodayDate(): string {
@@ -75,7 +82,7 @@ Now parse this input: "${userInput}"`;
           'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
+          model: this.model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userInput }

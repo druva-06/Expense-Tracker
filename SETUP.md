@@ -63,7 +63,8 @@ This will open Expo Dev Tools in your browser.
 2. Open the app
 3. Go to Settings tab
 4. Enter your API key
-5. Click "Save API Key"
+5. (Optional) Update the AI model (default is `gpt-4o-mini`)
+6. Click "Update API Key"
 
 **Note:** The app works without an API key using basic pattern matching!
 

@@ -58,7 +58,7 @@ export const ChatScreen = () => {
   const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
-  const { userId, refreshExpenses, lastDeletedExpense, setLastDeletedExpense } = useApp();
+  const { userId, quickPrompts, refreshExpenses, lastDeletedExpense, setLastDeletedExpense } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -414,7 +414,11 @@ export const ChatScreen = () => {
           <Text style={styles.headerTitle}>Your Expense Copilot</Text>
           <Text style={styles.headerSubtitle}>Track, query, edit, and manage expenses in one beautiful flow.</Text>
         </View>
-        <QuickPromptRow onSelectPrompt={handleSelectQuickPrompt} />
+        <QuickPromptRow
+          prompts={quickPrompts}
+          onSelectPrompt={handleSelectQuickPrompt}
+          onCustomize={() => navigation.navigate('Settings')}
+        />
 
         <FlatList
           ref={flatListRef}

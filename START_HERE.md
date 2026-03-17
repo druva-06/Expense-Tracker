@@ -90,7 +90,8 @@ Or press `a` in the terminal after `npm start`
 2. Open the app on your device
 3. Go to **Settings** tab
 4. Enter your API key
-5. Click **Save API Key**
+5. (Optional) Update the AI model (default is `gpt-4o-mini`)
+6. Click **Update API Key**
 
 **Note:** The app works WITHOUT an API key using basic pattern matching!
 

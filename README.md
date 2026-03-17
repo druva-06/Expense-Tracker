@@ -19,13 +19,14 @@ A React Native + Expo mobile app for tracking expenses through a chat-first work
 - Category breakdown and totals on Home
 - Local backup export and import/replace
 - API key management in Settings
+- Configurable AI model and customizable quick prompts (up to 3)
 
 ## Screens
 
 - **Chat**: Send natural-language requests, view confirmations, edit/delete entries
 - **Home**: Period totals and category donut breakdown
 - **History**: Search, date-range filters, grouped transactions, inline edit/delete
-- **Settings**: OpenAI key, backup/restore, app info
+- **Settings**: OpenAI key/model, quick prompt customization, backup/restore, app info
 
 ## Tech stack
 
@@ -84,6 +85,7 @@ Or run the quick setup helper:
 1. Open the app
 2. Go to `Settings`
 3. Add your OpenAI API key (`sk-...`)
+4. (Optional) Set your OpenAI model (default: `gpt-4o-mini`)
 
 Without a valid API key, chat add/query/edit/delete actions are blocked and the assistant will prompt you to configure the key.
 
